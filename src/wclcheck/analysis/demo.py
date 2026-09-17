@@ -16,6 +16,9 @@ Ausgabezeile gekennzeichnet:
   Casts plus den `resourcechange`-Events fortgeschrieben.
 - **Core-Overcap**: `refreshbuff` auf Demonic Core, während die Stacks bereits auf
   dem Maximum stehen.
+
+Aura-Fenster (Argus-Portal) und die Drift zum Cooldown rechnet `timeline.py` – dieselben
+Funktionen wie bei Destro, damit gleichnamige Ausgabezeilen beider Specs dasselbe messen.
 """
 
 from __future__ import annotations
@@ -31,13 +34,20 @@ from .casts import Cast
 from .loader import FightData
 from .metrics import GeneralMetrics
 from .rows import MetricRow
+from .timeline import (
+    DRIFT_TOLERANCE_S,
+    Span,
+    active_at,
+    aura_intervals,
+    cooldown_drift_s,
+    drift_list_s,
+    expected_casts,
+)
 
 log = logging.getLogger("wclcheck.demo")
 
 SOUL_SHARD_RESOURCE_TYPE = 7
 MAX_SHARDS = 5.0
-
-Span = tuple[int, int]
 
 
 # --------------------------------------------------------------------------- Hilfen
@@ -147,26 +157,6 @@ def track_core(
     return track
 
 
-def buff_windows(
-    buff_events: Iterable[dict[str, Any]], buff_id: int, fight_end: int
-) -> list[Span]:
-    """Fenster (applybuff -> removebuff) eines Spieler-Buffs; offene enden am Fightende."""
-    windows: list[Span] = []
-    start: int | None = None
-    for ev in buff_events:
-        if ev.get("abilityGameID") != buff_id:
-            continue
-        kind = ev.get("type")
-        if kind == "applybuff" and start is None:
-            start = ev["timestamp"]
-        elif kind == "removebuff" and start is not None:
-            windows.append((start, ev["timestamp"]))
-            start = None
-    if start is not None:
-        windows.append((start, fight_end))
-    return windows
-
-
 def shard_timeline(
     cast_events: Iterable[dict[str, Any]],
     resource_events: Iterable[dict[str, Any]],
@@ -254,25 +244,11 @@ def pet_spans(
     return spans
 
 
-def active_at(spans: Iterable[Span], ts: int) -> int:
-    return sum(1 for a, b in spans if a <= ts <= b)
-
-
 def mean_active(spans: Sequence[Span], start: int, end: int) -> float:
     """Mittlere Anzahl aktiver Pets über ein Fenster (Abtastung alle 0,5 s)."""
     step = rules.ACTIVE_SAMPLE_MS
     n = max(1, (end - start) // step)
     return sum(active_at(spans, start + i * step) for i in range(n)) / n
-
-
-def drifts(times_ms: Sequence[int], cooldown_s: float) -> list[float]:
-    """Verlorene Sekunden je Cast-Paar: Abstand minus Cooldown, unterhalb der
-    Toleranz auf 0 gesetzt."""
-    out: list[float] = []
-    for a, b in zip(times_ms, times_ms[1:], strict=False):
-        lost = (b - a) / 1000.0 - cooldown_s
-        out.append(lost if lost > rules.DRIFT_TOLERANCE_S else 0.0)
-    return out
 
 
 def targets_per_cast(
@@ -640,7 +616,10 @@ def compute_demo(data: FightData, general: GeneralMetrics) -> DemoMetrics:
 
     # --- Tyrant
     tyrant_times = _times(casts, spells.SUMMON_DEMONIC_TYRANT)
-    tyrant_drift = drifts(tyrant_times, rules.TYRANT_COOLDOWN_S)
+    # Drift-Semantik (inkl. Toleranz) gemeinsam mit Destro in `timeline.py`.
+    tyrant_drift = drift_list_s(
+        tyrant_times, rules.TYRANT_COOLDOWN_S, tolerance_s=DRIFT_TOLERANCE_S
+    )
     tyrant_damage = table_damage(table, spells.SUMMON_DEMONIC_TYRANT)
     _, tyrant_hits = table_uses_hits(table, spells.SUMMON_DEMONIC_TYRANT)
 
@@ -659,7 +638,9 @@ def compute_demo(data: FightData, general: GeneralMetrics) -> DemoMetrics:
     demon_spans = hog_spans + inner_spans + dread_spans
 
     # --- Dominion-Portalfenster
-    portals = buff_windows(data.buff_events, spells.DOMINION_OF_ARGUS_PORTAL_BUFF, end)
+    portals = aura_intervals(
+        data.buff_events, spells.DOMINION_OF_ARGUS_PORTAL_BUFF, start, end
+    )
     argus = [
         e["timestamp"] for e in data.summon_events
         if e.get("abilityGameID") in spells.ARGUS_SUMMONS
@@ -731,7 +712,7 @@ def compute_demo(data: FightData, general: GeneralMetrics) -> DemoMetrics:
         first_tyrant_s=rel(tyrant_times[0]) if tyrant_times else None,
         opener=[(rel(c.t), c.ability) for c in casts[:10]],
         tyrant_casts=len(tyrant_times),
-        tyrant_expected=rules.expected_casts(duration, rules.TYRANT_COOLDOWN_S),
+        tyrant_expected=expected_casts(duration, rules.TYRANT_COOLDOWN_S),
         tyrant_times_s=[rel(t) for t in tyrant_times],
         tyrant_drift_s=sum(tyrant_drift),
         tyrant_damage=tyrant_damage,
@@ -766,12 +747,16 @@ def compute_demo(data: FightData, general: GeneralMetrics) -> DemoMetrics:
         implosion_damage=table_damage(table, spells.IMPLOSION_DAMAGE),
         isolated_implosion_damage=table_damage(table, spells.ISOLATED_IMPLOSION),
         dreadstalker_casts=len(dread_times),
-        dreadstalker_expected=rules.expected_casts(duration, rules.DREADSTALKER_COOLDOWN_S),
-        dreadstalker_drift_s=sum(drifts(dread_times, rules.DREADSTALKER_COOLDOWN_S)),
+        dreadstalker_expected=expected_casts(duration, rules.DREADSTALKER_COOLDOWN_S),
+        dreadstalker_drift_s=cooldown_drift_s(
+            dread_times, rules.DREADSTALKER_COOLDOWN_S, tolerance_s=DRIFT_TOLERANCE_S
+        ),
         dreadstalker_damage=table_damage(table, spells.CALL_DREADSTALKERS),
         grimoire_casts=len(grim_times),
-        grimoire_expected=rules.expected_casts(duration, rules.GRIMOIRE_COOLDOWN_S),
-        grimoire_drift_s=sum(drifts(grim_times, rules.GRIMOIRE_COOLDOWN_S)),
+        grimoire_expected=expected_casts(duration, rules.GRIMOIRE_COOLDOWN_S),
+        grimoire_drift_s=cooldown_drift_s(
+            grim_times, rules.GRIMOIRE_COOLDOWN_S, tolerance_s=DRIFT_TOLERANCE_S
+        ),
         grimoire_damage=table_damage(table, spells.GRIMOIRE_IMP_LORD),
         ruination_casts=by[spells.RUINATION],
         ruination_expected=pit_lords,

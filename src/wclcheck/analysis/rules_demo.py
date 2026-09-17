@@ -73,9 +73,9 @@ TYRANT_COOLDOWN_S = 60.0
 DREADSTALKER_COOLDOWN_S = 20.0
 GRIMOIRE_COOLDOWN_S = 120.0
 
-# Drift unterhalb dieser Schwelle gilt als Rundungsrauschen (Reaktionszeit/GCD) und
-# wird nicht als verlorene Zeit gewertet.
-DRIFT_TOLERANCE_S = 0.5
+# Die Drift-Toleranz (Rundungsrauschen aus Reaktionszeit/GCD) steht als
+# `timeline.DRIFT_TOLERANCE_S` zentral, weil Destro dieselbe Schwelle benutzt und die
+# Zeilen "…-Drift zum CD" beider Specs damit vergleichbar bleiben.
 
 # --------------------------------------------------------------------------- Fenster
 # Bewertungsfenster ab dem Tyrant-Cast.
@@ -124,9 +124,5 @@ RUINATION_SOURCE = "Summon Pit Lord (Diabolic Ritual)"
 # (Buff 433891 zeitgleich mit 428565: 22,5 / 61,8 / 98,9 / 138,4 / 174,1 / 212,4 / 249,4 s).
 INFERNAL_BOLT_SOURCE = "Summon Mother of Chaos (Diabolic Ritual)"
 
-
-def expected_casts(duration_s: float, cooldown_s: float) -> int:
-    """Soll-Anzahl eines Cooldowns über die Kampfdauer: floor(Dauer / CD) + 1."""
-    if cooldown_s <= 0:
-        return 0
-    return int(duration_s // cooldown_s) + 1
+# Die Soll-Anzahl eines Cooldowns über die Kampfdauer (floor(Dauer / CD) + 1) rechnet
+# `timeline.expected_casts` – dieselbe Funktion benutzt Destro für "Casts vs. möglich".

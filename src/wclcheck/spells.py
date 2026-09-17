@@ -172,6 +172,10 @@ DESTRO_ROTATION: frozenset[int] = frozenset(
 
 KNOWN_ROTATION: frozenset[int] = DEMO_ROTATION | DESTRO_ROTATION
 
+# Casts, die einen laufenden Hardcast beenden: alle bekannten On-GCD-Zauber (inkl. Havoc).
+# Unbekannte IDs (On-Use-Trinkets, Procs) laufen parallel zum Cast und unterbrechen nicht.
+INTERRUPTING_CASTS: frozenset[int] = KNOWN_ROTATION | NOT_COUNTED
+
 # Spec-/Hero-Erkennung aus Casts
 DEMO_MARKERS: frozenset[int] = frozenset({HAND_OF_GULDAN, SUMMON_DEMONIC_TYRANT})
 DESTRO_MARKERS: frozenset[int] = frozenset({CHAOS_BOLT, WITHER, IMMOLATE})

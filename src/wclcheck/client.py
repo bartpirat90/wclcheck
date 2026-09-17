@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import logging
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from typing import Any
 
 import httpx
@@ -53,11 +54,14 @@ class WCLClient:
     def graphql(self, query: str, variables: dict[str, Any]) -> dict[str, Any]:
         """Roher GraphQL-Aufruf ohne Cache. Erneuert den Token einmal bei 401."""
         for attempt in (1, 2):
-            resp = self.http.post(
-                API_URL,
-                json={"query": query, "variables": variables},
-                headers={"Authorization": f"Bearer {self.tokens.token()}"},
-            )
+            try:
+                resp = self.http.post(
+                    API_URL,
+                    json={"query": query, "variables": variables},
+                    headers={"Authorization": f"Bearer {self.tokens.token()}"},
+                )
+            except httpx.HTTPError as exc:  # Verbindung, Timeout, Protokoll
+                raise WCLError(f"Netzwerkfehler beim API-Aufruf: {exc}") from exc
             self.requests_made += 1
             if resp.status_code == 401 and attempt == 1:
                 self.tokens.invalidate()
@@ -67,7 +71,12 @@ class WCLClient:
             raise WCLError("Rate-Limit erreicht (HTTP 429). Später erneut versuchen.")
         if resp.status_code != 200:
             raise WCLError(f"API-Fehler {resp.status_code}: {resp.text[:300]}")
-        body = resp.json()
+        try:
+            body = resp.json()
+        except json.JSONDecodeError as exc:
+            raise WCLError(f"Ungültige API-Antwort (kein JSON): {resp.text[:200]!r}") from exc
+        if not isinstance(body, dict):
+            raise WCLError(f"Ungültige API-Antwort: {resp.text[:200]!r}")
         if body.get("errors"):
             msg = "; ".join(e.get("message", str(e)) for e in body["errors"])
             raise WCLError(f"GraphQL-Fehler: {msg}")
@@ -83,14 +92,18 @@ class WCLClient:
         *,
         key_parts: tuple[Any, ...],
         max_age: float | None = None,
+        cache_if: Callable[[dict[str, Any]], bool] | None = None,
     ) -> dict[str, Any]:
+        """Gecachter Aufruf. `cache_if` kann Antworten vom Cachen ausschließen, die sich
+        serverseitig noch ändern (z. B. noch nicht berechnete Rankings)."""
         key = DiskCache.key(*key_parts, DiskCache.key(query))
         hit = self.cache.get(key, max_age=max_age)
         if hit is not None:
             return hit
         data = self.graphql(query, variables)
         data.pop("rateLimitData", None)
-        self.cache.set(key, data)
+        if cache_if is None or cache_if(data):
+            self.cache.set(key, data)
         return data
 
     # --------------------------------------------------------------------- Report
@@ -245,14 +258,22 @@ class WCLClient:
             key_parts=("rankings", variables),
             max_age=max_age,
         )
-        enc = data["worldData"]["encounter"]
-        return enc["characterRankings"] if enc else {}
+        enc = (data.get("worldData") or {}).get("encounter") or {}
+        return enc.get("characterRankings") or {}  # null, wenn keine Rankings existieren
 
     def report_rankings(self, code: str, fight: Fight) -> dict[str, Any]:
+        """Report-Rankings (Parse). WCL berechnet sie erst einige Minuten nach dem Upload;
+        leere Antworten werden deshalb nicht gecacht."""
+
+        def _rankings(data: dict[str, Any]) -> dict[str, Any]:
+            report = (data.get("reportData") or {}).get("report") or {}
+            return report.get("rankings") or {}
+
         data = self.cached_graphql(
             queries.REPORT_RANKINGS,
             {"code": code, "fightIDs": [fight.id], "playerMetric": "dps"},
             key_parts=(code, fight.id, "report_rankings"),
             max_age=self._max_age(code, self._fight_max_age(fight)),
+            cache_if=lambda d: bool(_rankings(d).get("data")),
         )
-        return data["reportData"]["report"]["rankings"] or {}
+        return _rankings(data)

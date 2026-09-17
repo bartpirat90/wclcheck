@@ -12,7 +12,7 @@ Regeln (Spec):
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 PAGE_SIZE = 100
@@ -43,9 +43,18 @@ class RankingEntry:
         return f"https://www.warcraftlogs.com/reports/{self.report_code}#fight={self.fight_id}"
 
 
+def _norm(s: str | None) -> str:
+    return (s or "").replace(" ", "").replace("'", "").casefold()
+
+
+def player_key(name: str | None, server: str | None) -> tuple[str, str]:
+    """Vergleichsschlüssel für „derselbe Charakter“ (Name + Server, normalisiert)."""
+    return _norm(name), _norm(server)
+
+
 @dataclass(frozen=True)
 class Criteria:
-    ilvl: float
+    ilvl: float | None  # None = Ilvl des Spielers unbekannt, Filter deaktiviert
     duration_ms: int
     ilvl_tolerance: float = 2.0
     duration_tolerance: float = 0.10
@@ -54,18 +63,12 @@ class Criteria:
     regions: frozenset[str] = frozenset({"EU"})
     skip_top: int = SKIP_TOP
     exclude: frozenset[tuple[str, int]] = frozenset()  # (report_code, fight_id) des Spielers
+    # Der analysierte Charakter selbst (sein bester Kill kann in einem anderen Report liegen).
+    exclude_player: tuple[str, str] | None = None
 
     def relaxed(self, ilvl_tolerance: float, duration_tolerance: float) -> Criteria:
-        return Criteria(
-            ilvl=self.ilvl,
-            duration_ms=self.duration_ms,
-            ilvl_tolerance=ilvl_tolerance,
-            duration_tolerance=duration_tolerance,
-            size_min=self.size_min,
-            size_max=self.size_max,
-            regions=self.regions,
-            skip_top=self.skip_top,
-            exclude=self.exclude,
+        return replace(
+            self, ilvl_tolerance=ilvl_tolerance, duration_tolerance=duration_tolerance
         )
 
     @property
@@ -115,9 +118,13 @@ def reject_reason(entry: RankingEntry, c: Criteria) -> str | None:
         return "anonym"
     if (entry.report_code, entry.fight_id) in c.exclude:
         return "eigener Report"
+    if c.exclude_player is not None:
+        name, server = player_key(entry.name, entry.server)
+        if name == c.exclude_player[0] and server in ("", c.exclude_player[1]):
+            return "eigener Charakter"
     if c.regions and (entry.region or "").upper() not in c.regions:
         return "Region"
-    if entry.ilvl is None or abs(entry.ilvl - c.ilvl) > c.ilvl_tolerance:
+    if c.ilvl is not None and (entry.ilvl is None or abs(entry.ilvl - c.ilvl) > c.ilvl_tolerance):
         return "Ilvl"
     max_delta = c.duration_tolerance * c.duration_ms
     if c.duration_ms and abs(entry.duration_ms - c.duration_ms) > max_delta:
@@ -128,9 +135,10 @@ def reject_reason(entry: RankingEntry, c: Criteria) -> str | None:
 
 
 def relaxation_steps(c: Criteria) -> list[Criteria]:
-    """Ausgangs-Toleranz, dann zwei Lockerungsstufen bis maximal ±4 Ilvl / ±20 %."""
+    """Ausgangs-Toleranz, dann zwei Lockerungsstufen bis ±4 Ilvl / ±20 %. Eine Stufe ist
+    nie strenger als die Ausgangs-Toleranz (auch bei `--ilvl-tolerance 5`)."""
     steps = [c]
-    t1 = min(4.0, c.ilvl_tolerance + 1)
+    t1 = max(c.ilvl_tolerance, min(4.0, c.ilvl_tolerance + 1))
     t2 = max(4.0, c.ilvl_tolerance)
     for tol, dur in ((t1, 0.15), (t2, 0.20)):
         if tol > steps[-1].ilvl_tolerance or dur > steps[-1].duration_tolerance:

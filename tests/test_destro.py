@@ -8,19 +8,14 @@ from wclcheck import spells
 from wclcheck.analysis import rules_destro as rules
 from wclcheck.analysis.casts import Cast
 from wclcheck.analysis.destro import (
-    aura_intervals,
     charge_cap_time_s,
     classify_wither_refreshes,
-    cooldown_drift_s,
     debuff_intervals_by_target,
-    in_any,
     kill_reset_casts,
     last_known_shards,
-    merge,
-    possible_casts,
     shard_overcap,
-    total_ms,
 )
+from wclcheck.analysis.timeline import aura_intervals, in_any
 
 S = 1000  # eine Sekunde in ms
 
@@ -46,35 +41,7 @@ def cast(ts_s: float, ability: int, target: int = 10, shards: float | None = Non
 
 
 # --------------------------------------------------------------------------- Intervalle
-def test_aura_intervals_basics():
-    evs = [buff(2, "applybuff", 1), buff(5, "removebuff", 1)]
-    assert aura_intervals(evs, 1, 0, 10 * S) == [(2 * S, 5 * S)]
-
-
-def test_aura_intervals_prepull_and_open_end():
-    """remove ohne apply zählt ab Kampfbeginn, ein offener Buff bis Kampfende."""
-    evs = [buff(3, "removebuff", 1), buff(8, "applybuff", 1)]
-    assert aura_intervals(evs, 1, 0, 10 * S) == [(0, 3 * S), (8 * S, 10 * S)]
-
-
-def test_aura_intervals_apply_and_remove_same_ms_stays_active():
-    """WCL protokolliert beim Aura-Austausch apply+remove auf derselben Millisekunde."""
-    evs = [
-        buff(1, "applybuff", 1),
-        buff(4, "applybuff", 1),
-        buff(4, "removebuff", 1),
-        buff(9, "removebuff", 1),
-    ]
-    assert aura_intervals(evs, 1, 0, 10 * S) == [(1 * S, 9 * S)]
-
-
-def test_merge_and_total_and_in_any():
-    ivs = [(0, 5), (3, 7), (20, 25)]
-    assert merge(ivs) == [(0, 7), (20, 25)]
-    assert total_ms(ivs) == 12
-    assert in_any(6, merge(ivs)) and not in_any(10, merge(ivs))
-
-
+# Die generischen Intervall-/Drift-Hilfen werden in tests/test_timeline.py geprüft.
 def test_debuff_intervals_separated_by_instance():
     evs = [
         debuff(0, "applydebuff", 10, 1),
@@ -275,13 +242,6 @@ def test_last_known_shards_uses_snapshot_minus_cost():
 
 
 # --------------------------------------------------------------------------- Cooldowns
-def test_cooldown_drift_and_possible_casts():
-    times = [0, 60 * S, 125 * S]  # 5 s Drift im zweiten Abstand
-    assert cooldown_drift_s(times, 60.0) == pytest.approx(5.0)
-    assert possible_casts(388.0, 60.0) == 7
-    assert possible_casts(388.0, 90.0) == 5
-
-
 def test_estimate_recharge_ignores_windows_with_deaths():
     """Ohne Todesfälle liefert der Minimum-Schätzer den echten Takt."""
     casts = [0, 1 * S, 8 * S, 9 * S, 16 * S]

@@ -17,6 +17,9 @@ Bekannte Näherungen (im jeweiligen `detail` der Ausgabe gekennzeichnet):
 - **Zeit auf voller Ladung**: Ladungsmodell mit geschätzter Recharge-Zeit (s. rules_destro).
 - **Shards beim Havoc-Cast**: Havoc kostet keine Shards und liefert daher keinen Snapshot;
   benutzt wird der letzte bekannte Stand (Snapshot des vorherigen Spenders minus Kosten).
+
+Aura-Intervalle und die Drift zum Cooldown rechnet `timeline.py` – dieselben Funktionen
+wie bei Demo, damit gleichnamige Ausgabezeilen beider Specs dasselbe messen.
 """
 
 from __future__ import annotations
@@ -32,49 +35,23 @@ from .casts import Cast
 from .loader import FightData
 from .metrics import GeneralMetrics
 from .rows import MetricRow
+from .timeline import (
+    CLOSE_TYPES,
+    DRIFT_TOLERANCE_S,
+    OPEN_TYPES,
+    Interval,
+    aura_intervals,
+    cooldown_drift_s,
+    expected_casts,
+    in_any,
+    merge,
+    total_ms,
+)
 
 log = logging.getLogger("wclcheck.destro")
 
-Interval = tuple[int, int]  # (start_ms, end_ms), absolute Zeitstempel
-
-_OPEN_TYPES = frozenset({"applybuff", "refreshbuff", "applydebuff", "refreshdebuff"})
-_CLOSE_TYPES = frozenset({"removebuff", "removedebuff"})
-
 
 # --------------------------------------------------------------------------- Intervalle
-def aura_intervals(
-    events: Iterable[dict], ability_id: int, start_ms: int, end_ms: int
-) -> list[Interval]:
-    """Aktiv-Intervalle einer Aura (Buff oder Debuff) auf *einem* Träger.
-
-    Regeln: apply/refresh öffnet, remove schließt. Fallen an derselben Millisekunde
-    apply und remove zusammen (WCL protokolliert das beim Austausch einer Aura), bleibt
-    die Aura aktiv. Ein remove ohne vorheriges apply gilt ab Kampfbeginn (Pre-Pull),
-    eine offene Aura läuft bis Kampfende.
-    """
-    by_ts: dict[int, set[str]] = defaultdict(set)
-    for ev in events:
-        if ev.get("abilityGameID") != ability_id:
-            continue
-        kind = ev.get("type")
-        if kind in _OPEN_TYPES or kind in _CLOSE_TYPES:
-            by_ts[ev["timestamp"]].add(kind)
-
-    out: list[Interval] = []
-    active_since: int | None = None
-    for ts in sorted(by_ts):
-        kinds = by_ts[ts]
-        if kinds & _OPEN_TYPES:
-            if active_since is None:
-                active_since = ts
-        elif kinds & _CLOSE_TYPES:
-            out.append((active_since if active_since is not None else start_ms, ts))
-            active_since = None
-    if active_since is not None:
-        out.append((active_since, end_ms))
-    return [(max(a, start_ms), min(b, end_ms)) for a, b in out if min(b, end_ms) > max(a, start_ms)]
-
-
 def debuff_intervals_by_target(
     events: Sequence[dict], ability_id: int, start_ms: int, end_ms: int
 ) -> dict[tuple[int, int | None], list[Interval]]:
@@ -87,25 +64,6 @@ def debuff_intervals_by_target(
         key: aura_intervals(evs, ability_id, start_ms, end_ms)
         for key, evs in per_target.items()
     }
-
-
-def merge(intervals: Iterable[Interval]) -> list[Interval]:
-    """Vereinigt überlappende Intervalle."""
-    out: list[Interval] = []
-    for a, b in sorted(intervals):
-        if out and a <= out[-1][1]:
-            out[-1] = (out[-1][0], max(out[-1][1], b))
-        else:
-            out.append((a, b))
-    return out
-
-
-def total_ms(intervals: Iterable[Interval]) -> int:
-    return sum(b - a for a, b in merge(intervals))
-
-
-def in_any(t: int, intervals: Sequence[Interval]) -> bool:
-    return any(a <= t <= b for a, b in intervals)
 
 
 # --------------------------------------------------------------------------- Wither
@@ -160,7 +118,7 @@ def classify_wither_refreshes(
         if ev.get("abilityGameID") != ability_id:
             continue
         kind = ev.get("type")
-        if kind in _OPEN_TYPES or kind in _CLOSE_TYPES:
+        if kind in OPEN_TYPES or kind in CLOSE_TYPES:
             by_target[(ev.get("targetID", -1), ev.get("targetInstance"))][ev["timestamp"]].add(kind)
 
     for groups in by_target.values():
@@ -168,7 +126,7 @@ def classify_wither_refreshes(
         seen = False
         for ts in sorted(groups):
             kinds = groups[ts]
-            if kinds & _OPEN_TYPES:
+            if kinds & OPEN_TYPES:
                 if expiry is None:
                     if seen:
                         stats.expired += 1
@@ -183,7 +141,7 @@ def classify_wither_refreshes(
                     elif remaining > rules.REFRESH_TOO_EARLY_S:
                         stats.too_early += 1
                     expiry = ts + min(duration_s + remaining, max_s) * 1000.0
-            elif kinds & _CLOSE_TYPES:
+            elif kinds & CLOSE_TYPES:
                 expiry = None
     return stats
 
@@ -310,19 +268,6 @@ def last_known_shards(casts: Sequence[Cast], index: int) -> float | None:
             continue
         return max(0.0, prev.shards - (prev.shard_cost or 0.0))
     return None
-
-
-# --------------------------------------------------------------------------- Drift
-def cooldown_drift_s(cast_times_ms: Sequence[int], cd_s: float) -> float:
-    """Summierte Verspätung gegenüber dem Cooldown zwischen aufeinanderfolgenden Casts."""
-    times = sorted(cast_times_ms)
-    return sum(
-        max(0.0, (b - a) / 1000.0 - cd_s) for a, b in zip(times, times[1:], strict=False)
-    )
-
-
-def possible_casts(duration_s: float, cd_s: float) -> int:
-    return int(duration_s // cd_s) + 1 if cd_s > 0 else 0
 
 
 # --------------------------------------------------------------------------- Metriken
@@ -630,7 +575,7 @@ def compute_destro(data: FightData, general: GeneralMetrics) -> DestroMetrics:
     soul_fires = [c for c in casts if c.ability == spells.SOUL_FIRE]
     m.soul_fire_casts = len(soul_fires)
     m.soul_fire_damage = data.damage_of(spells.SOUL_FIRE)
-    m.soul_fire_possible = possible_casts(general.duration_s, rules.SOUL_FIRE_CD_S)
+    m.soul_fire_possible = expected_casts(general.duration_s, rules.SOUL_FIRE_CD_S)
     # Backdraft wird beim Beginn des Hardcasts verbraucht, deshalb `start` statt `t`.
     m.soul_fire_with_backdraft = sum(1 for c in soul_fires if in_any(c.start, backdraft_intervals))
 
@@ -638,8 +583,11 @@ def compute_destro(data: FightData, general: GeneralMetrics) -> DestroMetrics:
     malevolence_times = times(spells.MALEVOLENCE)
     m.malevolence_casts = len(malevolence_times)
     m.malevolence_damage = data.damage_of(spells.MALEVOLENCE_DAMAGE)
-    m.malevolence_drift_s = cooldown_drift_s(malevolence_times, rules.MALEVOLENCE_CD_S)
-    m.malevolence_possible = possible_casts(general.duration_s, rules.MALEVOLENCE_CD_S)
+    # Drift-Semantik (inkl. Toleranz) gemeinsam mit Demo in `timeline.py`.
+    m.malevolence_drift_s = cooldown_drift_s(
+        malevolence_times, rules.MALEVOLENCE_CD_S, tolerance_s=DRIFT_TOLERANCE_S
+    )
+    m.malevolence_possible = expected_casts(general.duration_s, rules.MALEVOLENCE_CD_S)
     m.malevolence_times_s = rel(malevolence_times)
     m.malevolence_uptime_pct = 100.0 * total_ms(malevolence_intervals) / span_ms
     m.spenders_in_malevolence = sum(
@@ -651,8 +599,10 @@ def compute_destro(data: FightData, general: GeneralMetrics) -> DestroMetrics:
     infernal_times = times(spells.SUMMON_INFERNAL)
     m.infernal_casts = len(infernal_times)
     m.infernal_damage = data.damage_of(spells.INFERNAL_DAMAGE, spells.INFERNAL_CAST_DAMAGE)
-    m.infernal_drift_s = cooldown_drift_s(infernal_times, rules.INFERNAL_CD_S)
-    m.infernal_possible = possible_casts(general.duration_s, rules.INFERNAL_CD_S)
+    m.infernal_drift_s = cooldown_drift_s(
+        infernal_times, rules.INFERNAL_CD_S, tolerance_s=DRIFT_TOLERANCE_S
+    )
+    m.infernal_possible = expected_casts(general.duration_s, rules.INFERNAL_CD_S)
     m.infernal_times_s = rel(infernal_times)
 
     # ------------------------------------------------------------------ Havoc

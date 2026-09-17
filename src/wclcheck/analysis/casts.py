@@ -124,8 +124,9 @@ def parse_casts(
             if pending is not None and pending[0] == ability:
                 begin = pending[1]
                 pending = None
-            elif ability not in spells.UTILITY:
-                # Ein anderer On-GCD-Cast unterbricht den laufenden Hardcast.
+            elif ability in spells.INTERRUPTING_CASTS:
+                # Nur ein bekannter On-GCD-Cast beendet den laufenden Hardcast; Trinkets,
+                # Tränke und unbekannte Off-GCD-IDs laufen parallel weiter.
                 cancel("cast")
             shards, cost = _shards(ev)
             casts.append(

@@ -61,8 +61,8 @@ Am Ende ein Raid-Fazit mit den drei größten Hebeln über alle Bosse.
 
 Rankings desselben Encounters, derselben Spec und Schwierigkeit. Filter: Ilvl ±2
 (`--ilvl-tolerance`), Kampfdauer ±10 %, Raidgröße 20–30, keine anonymen Reports, Region
-laut `--region`. Rang 1–10 wird übersprungen; genommen werden die ersten drei Treffer
-danach. Reichen fünf Ranking-Seiten nicht, werden die Toleranzen schrittweise auf ±4 Ilvl /
+laut `--region`. Rang 1–10 wird übersprungen, ebenso der analysierte Charakter selbst; genommen
+werden die ersten drei Treffer danach. Reichen fünf Ranking-Seiten nicht, werden die Toleranzen schrittweise auf ±4 Ilvl /
 ±20 % gelockert und das in der Ausgabe vermerkt. Jeder Vergleichsspieler läuft durch
 exakt dieselbe Metrik-Pipeline.
 
@@ -88,7 +88,8 @@ Rotationsregeln stehen als Kommentar in `src/wclcheck/analysis/rules_demo.py` un
 
 Alle Report-Abfragen werden unter `platformdirs.user_cache_dir("wclcheck")` gecacht
 (Schlüssel: Report-Code, Fight-ID, Query-Hash). Die Fight-Liste eines Reports ist maximal
-60 s gültig, Events abgeschlossener Fights dauerhaft. `--no-cache` zieht nur den
+60 s gültig, Events abgeschlossener Fights dauerhaft. Report-Rankings (Parse) werden
+erst gecacht, sobald WCL sie berechnet hat. `--no-cache` zieht nur den
 analysierten Report neu; Vergleichslogs bleiben gecacht. Ein kompletter Boss mit drei
 Vergleichsspielern kostet etwa 40 API-Punkte (Limit 3600 pro Stunde), gecachte Läufe
 kosten nichts.

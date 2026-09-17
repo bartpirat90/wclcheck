@@ -81,5 +81,9 @@ def load_comparator(client: WCLClient, entry: RankingEntry) -> Comparator | None
     if actor is None:
         log.warning("Spieler %s nicht in %s gefunden", entry.name, entry.report_code)
         return None
-    data = load_fight_data(client, report, fight, actor, with_damage_events=True)
+    try:
+        data = load_fight_data(client, report, fight, actor, with_damage_events=True)
+    except WCLError as exc:
+        log.warning("Daten für %s (%s) nicht ladbar: %s", entry.name, entry.report_code, exc)
+        return None
     return Comparator(entry=entry, report=report, fight=fight, actor=actor, data=data)

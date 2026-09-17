@@ -12,7 +12,7 @@ from .comparators import find_comparators, load_comparator
 from .compare import Comparison, Finding, Lever, compare_rows, derive_findings, raid_levers
 from .loader import FightData, load_fight_data
 from .metrics import GeneralMetrics, compute_general
-from .rankings import Criteria, RankingEntry, Selection
+from .rankings import Criteria, RankingEntry, Selection, player_key
 from .rows import MetricRow
 
 log = logging.getLogger("wclcheck.report")
@@ -82,6 +82,7 @@ class RaidResult:
     bosses: list[BossResult]
     levers: list[Lever]
     options: Options
+    errors: list[str] = field(default_factory=list)  # Bosse, die nicht analysiert werden konnten
 
 
 def spec_rows_for(data: FightData, general: GeneralMetrics) -> list[MetricRow]:
@@ -138,13 +139,16 @@ def analyze_boss(
         result.notes.append("Keine Schwierigkeit im Report, keine Vergleichsspieler.")
         return result
 
-    ilvl = player.general.ilvl or fight.averageItemLevel or 0.0
+    ilvl = player.general.ilvl or fight.averageItemLevel
+    if not ilvl:
+        result.notes.append("Ilvl des Spielers unbekannt, Ilvl-Filter für Vergleich deaktiviert.")
     criteria = Criteria(
-        ilvl=ilvl,
+        ilvl=ilvl or None,
         duration_ms=fight.duration_ms,
         ilvl_tolerance=opts.ilvl_tolerance,
         regions=opts.regions,
         exclude=frozenset({(report.code, fight.id)}),
+        exclude_player=player_key(actor.name, actor.server),
     )
     say(f"{fight.name}: suche Vergleichsspieler ({spec.spec}, {fight.difficulty_name})")
     try:
@@ -206,7 +210,15 @@ def analyze_raid(
     progress: Progress | None = None,
 ) -> RaidResult:
     bosses: list[BossResult] = []
+    errors: list[str] = []
     for fight in fights:
-        bosses.append(analyze_boss(client, report, fight, actor, opts, progress))
+        try:
+            bosses.append(analyze_boss(client, report, fight, actor, opts, progress))
+        except WCLError as exc:
+            # Ein Boss darf die fertigen Ergebnisse der anderen nicht verwerfen.
+            log.warning("Fight %s (%s) nicht analysierbar: %s", fight.id, fight.name, exc)
+            errors.append(f"{fight.name} (Fight {fight.id}): {exc}")
     levers = raid_levers({f"{b.fight.name} #{b.fight.id}": b.findings for b in bosses})
-    return RaidResult(report=report, actor=actor, bosses=bosses, levers=levers, options=opts)
+    return RaidResult(
+        report=report, actor=actor, bosses=bosses, levers=levers, options=opts, errors=errors
+    )

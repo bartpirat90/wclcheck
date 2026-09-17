@@ -72,6 +72,11 @@ CONFLAGRATE_RECHARGE_S = 6.8
 CONFLAGRATE_RECHARGE_RANGE_S = (5.0, 13.0)
 
 # --------------------------------------------------------------------------- Cooldowns
+# Die Drift-Messung zu diesen Cooldowns (Zeilen „…-Drift zum CD") steckt in
+# `timeline.cooldown_drift_s` und benutzt dieselbe Toleranz `timeline.DRIFT_TOLERANCE_S`
+# wie Demonology: Verspätungen bis 0,5 s gelten als Reaktionszeit-/GCD-Rauschen und
+# zählen als 0, darüber zählt die volle Verspätung. Damit sind die gleichnamigen Zeilen
+# beider Specs direkt vergleichbar.
 # Malevolence: kleinster Abstand zweier Casts 60,3 s bei 7 Casts in 388 s → 60 s, sicher.
 MALEVOLENCE_CD_S = 60.0
 # Summon Infernal: Abstände 90,6 / 90,9 / 91,6 / 91,7 s → 90 s, sicher.

@@ -33,15 +33,21 @@ class TokenProvider:
         self._load()
 
     def _load(self) -> None:
+        # Eine unlesbare oder falsch geformte Datei gilt als „kein Token“.
         try:
             data = json.loads(self._path.read_text("utf-8"))
-        except (OSError, json.JSONDecodeError):
+            if not isinstance(data, dict):
+                return
+            # Token nur wiederverwenden, wenn er zur selben Client-ID gehört.
+            if data.get("client_id") != self._client_id:
+                return
+            token = data.get("access_token")
+            expires_at = float(data.get("expires_at") or 0)
+        except (OSError, ValueError, TypeError):
             return
-        # Token nur wiederverwenden, wenn er zur selben Client-ID gehört.
-        if data.get("client_id") != self._client_id:
-            return
-        self._token = data.get("access_token")
-        self._expires_at = float(data.get("expires_at", 0))
+        if isinstance(token, str) and token:
+            self._token = token
+            self._expires_at = expires_at
 
     def _save(self) -> None:
         self._path.parent.mkdir(parents=True, exist_ok=True)
@@ -63,17 +69,23 @@ class TokenProvider:
     def token(self) -> str:
         if self._token and time.time() < self._expires_at - _REFRESH_MARGIN_S:
             return self._token
-        resp = self._http.post(
-            TOKEN_URL,
-            data={"grant_type": "client_credentials"},
-            auth=(self._client_id, self._client_secret),
-        )
+        try:
+            resp = self._http.post(
+                TOKEN_URL,
+                data={"grant_type": "client_credentials"},
+                auth=(self._client_id, self._client_secret),
+            )
+        except httpx.HTTPError as exc:
+            raise AuthError(f"Netzwerkfehler beim Token-Abruf: {exc}") from exc
         if resp.status_code != 200:
             raise AuthError(
                 f"Token-Abruf fehlgeschlagen ({resp.status_code}): {resp.text[:200]}"
             )
-        body = resp.json()
-        self._token = body["access_token"]
+        try:
+            body = resp.json()
+            self._token = body["access_token"]
+        except (ValueError, KeyError, TypeError) as exc:
+            raise AuthError(f"Ungültige Token-Antwort: {resp.text[:200]!r}") from exc
         self._expires_at = time.time() + float(body.get("expires_in", 3600))
         self._save()
         return self._token

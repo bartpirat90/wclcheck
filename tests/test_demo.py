@@ -7,9 +7,6 @@ import pytest
 from wclcheck import spells
 from wclcheck.analysis import rules_demo as rules
 from wclcheck.analysis.demo import (
-    active_at,
-    buff_windows,
-    drifts,
     mean_active,
     pet_spans,
     shard_timeline,
@@ -18,6 +15,13 @@ from wclcheck.analysis.demo import (
     table_uses_hits,
     targets_per_cast,
     track_core,
+)
+from wclcheck.analysis.timeline import (
+    DRIFT_TOLERANCE_S,
+    active_at,
+    aura_intervals,
+    drift_list_s,
+    expected_casts,
 )
 
 CORE = spells.DEMONIC_CORE_BUFF
@@ -32,22 +36,25 @@ def buff(ts: int, kind: str, ability: int = CORE, stack: int | None = None) -> d
 
 
 # --------------------------------------------------------------------------- Drift
+# Die Drift-Mechanik selbst steckt in `timeline.py` (s. tests/test_timeline.py); hier
+# steht nur, dass Demo sie mit der gemeinsamen Toleranz benutzt.
 
 
 def test_drift_ignoriert_rauschen_und_summiert_verlust():
     # 60 s Cooldown: 60,2 s liegt in der Toleranz, 66,2 s kostet 6,2 s.
     times = [0, 60_200, 126_400]
-    assert drifts(times, 60.0) == pytest.approx([0.0, 6.2])
+    got = drift_list_s(times, 60.0, tolerance_s=DRIFT_TOLERANCE_S)
+    assert got == pytest.approx([0.0, 6.2])
 
 
 def test_drift_ohne_paare():
-    assert drifts([1000], 60.0) == []
+    assert drift_list_s([1000], 60.0, tolerance_s=DRIFT_TOLERANCE_S) == []
 
 
 def test_expected_casts():
-    assert rules.expected_casts(283.0, 60.0) == 5
-    assert rules.expected_casts(305.0, 60.0) == 6
-    assert rules.expected_casts(283.0, 20.0) == 15
+    assert expected_casts(283.0, rules.TYRANT_COOLDOWN_S) == 5
+    assert expected_casts(305.0, rules.TYRANT_COOLDOWN_S) == 6
+    assert expected_casts(283.0, rules.DREADSTALKER_COOLDOWN_S) == 15
 
 
 # --------------------------------------------------------------------- Demonic Core
@@ -97,7 +104,7 @@ def test_portal_fenster_aus_buff_events():
         buff(26_000, "removebuff", ability=PORTAL),
         buff(60_000, "applybuff", ability=PORTAL),
     ]
-    windows = buff_windows(events, PORTAL, fight_end=80_000)
+    windows = aura_intervals(events, PORTAL, 0, 80_000)
     assert windows == [(1000, 26_000), (60_000, 80_000)]
 
 
@@ -106,7 +113,7 @@ def test_portal_fenster_zaehlt_hog_und_daemonen():
         buff(0, "applybuff", ability=PORTAL),
         buff(25_000, "removebuff", ability=PORTAL),
     ]
-    (start, end), = buff_windows(events, PORTAL, fight_end=30_000)
+    (start, end), = aura_intervals(events, PORTAL, 0, 30_000)
     hog = [1_000, 5_000, 24_000, 26_000]
     assert sum(1 for t in hog if start <= t <= end) == 3
 

@@ -226,6 +226,8 @@ def render_terminal(result: RaidResult, console: Console) -> None:
             console.print(f"[yellow]Hinweis: {note}[/yellow]")
         console.print()
 
+    for err in result.errors:
+        console.print(f"[red]Nicht analysiert: {err}[/red]")
     console.rule("[bold]Raid-Fazit[/bold]", align="left")
     if result.levers:
         for i, lv in enumerate(result.levers, 1):
@@ -288,6 +290,7 @@ def render_markdown(result: RaidResult) -> str:
         out += ["", _md_table(block.gear), ""]
         out += [f"> Hinweis: {n}" for n in block.notes]
         out.append("")
+    out += [f"> Nicht analysiert: {e}" for e in result.errors]
     out += ["## Raid-Fazit", ""]
     out += [f"{i}. {lv.text}" for i, lv in enumerate(result.levers, 1)] or ["_keine Hebel_"]
     out.append("")
