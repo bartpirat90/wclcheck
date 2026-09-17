@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QScrollArea,
     QSizePolicy,
     QTableWidget,
     QTableWidgetItem,
@@ -44,16 +45,94 @@ def card(*children: QWidget, title: str | None = None) -> QFrame:
     return frame
 
 
+class _FitHeight:
+    """Höhe = Inhalt, plus Platz für die waagerechte Bildlaufleiste, aber nur wenn
+    sie gebraucht wird.
+
+    Gedacht für Blöcke mit unverrückbaren Spalten. Ohne eigene Bildlaufleiste
+    müsste entweder die ganze Detailseite breiter werden oder der Inhalt würde
+    stumm abgeschnitten; beides ist schlechter als ein Balken an der einen Stelle,
+    die zu schmal geworden ist.
+    """
+
+    _body_height = 0
+    _full_width = 0
+
+    def _fit_height(self) -> None:
+        bar = self.horizontalScrollBar().sizeHint().height()
+        want = self._body_height + (bar if self.viewport().width() < self._full_width else 0)
+        if self.height() != want:
+            self.setFixedHeight(want)
+
+    def _on_resized(self) -> None:
+        self._fit_height()
+
+    def resizeEvent(self, event) -> None:  # noqa: N802 - Qt-Namensschema
+        super().resizeEvent(event)
+        self._on_resized()
+
+
+class _Table(_FitHeight, QTableWidget):
+    """Tabelle in Inhaltshöhe, die bei zu wenig Platz selbst waagerecht scrollt.
+
+    Die erste Spalte trägt die Beschriftung und wird deshalb von Hand gedehnt statt
+    über `QHeaderView.Stretch`: eine gedehnte Spalte lässt sich bis auf „…“
+    zusammendrücken, und dann steht in der Tabelle genau das nicht mehr da, worum
+    es geht. So bleibt sie mindestens so breit wie ihr Inhalt und die Tabelle
+    scrollt stattdessen.
+    """
+
+    def fit(self) -> None:
+        """Nach dem Füllen aufrufen, sobald Zeilenhöhen und Spaltenbreiten stehen."""
+        self.resizeRowsToContents()
+        header = self.horizontalHeader()
+        self._body_height = header.height() + sum(
+            self.rowHeight(r) for r in range(self.rowCount())
+        ) + 2
+        self._label_width = self.sizeHintForColumn(0) if self.columnCount() else 0
+        self._fit_columns()
+        self._fit_height()
+
+    def _fit_columns(self) -> None:
+        if self.columnCount() < 2:
+            return
+        others = sum(self.columnWidth(c) for c in range(1, self.columnCount()))
+        self.setColumnWidth(0, max(self._label_width, self.viewport().width() - others))
+        self._full_width = self._label_width + others + 2
+
+    def _on_resized(self) -> None:
+        self._fit_columns()
+        self._fit_height()
+
+
+class _HScroll(_FitHeight, QScrollArea):
+    """Rahmen für Inhalte fester Breite, etwa den Mono-Block der Cast-Fenster."""
+
+    def __init__(self, inner: QWidget) -> None:
+        super().__init__()
+        self.setWidget(inner)
+        self.setWidgetResizable(True)
+        self.setFrameShape(QFrame.Shape.NoFrame)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self._body_height = inner.sizeHint().height()
+        self._full_width = inner.minimumSizeHint().width()
+        inner.setMinimumWidth(self._full_width)
+        self.setMinimumWidth(120)
+        self._fit_height()
+
+
 def table(spec: TableSpec) -> QTableWidget:
-    """Tabelle in Inhaltshöhe, ohne eigene Bildlaufleisten."""
-    widget = QTableWidget(len(spec.rows), len(spec.headers))
+    """Tabelle in Inhaltshöhe; zu schmal geworden scrollt sie waagerecht."""
+    widget = _Table(len(spec.rows), len(spec.headers))
     widget.setHorizontalHeaderLabels(spec.headers)
     widget.verticalHeader().setVisible(False)
     widget.setShowGrid(False)
     widget.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
     widget.setFocusPolicy(Qt.FocusPolicy.NoFocus)
     widget.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-    widget.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+    widget.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+    widget.setHorizontalScrollMode(QTableWidget.ScrollMode.ScrollPerPixel)
     widget.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
     widget.setWordWrap(False)
 
@@ -78,13 +157,11 @@ def table(spec: TableSpec) -> QTableWidget:
     header = widget.horizontalHeader()
     header.setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
     if widget.columnCount() > 1:
-        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Interactive)
     header.setHighlightSections(False)
 
-    widget.resizeRowsToContents()
-    height = header.height() + sum(widget.rowHeight(r) for r in range(widget.rowCount())) + 2
-    widget.setFixedHeight(height)
     widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+    widget.fit()
     return widget
 
 
@@ -128,6 +205,7 @@ def _links_row(links: list[tuple[str, str]]) -> QLabel:
     label = QLabel(" &nbsp;·&nbsp; ".join(parts))
     label.setOpenExternalLinks(True)
     label.setTextFormat(Qt.TextFormat.RichText)
+    label.setWordWrap(True)  # sonst hält die Linkzeile die ganze Seite auf Breite
     return label
 
 
@@ -145,7 +223,7 @@ def _windows_card(windows: list[tuple[str, str]]) -> QFrame:
         label.setFont(mono)
         label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         box.addWidget(label)
-    return card(inner, title="Casts pro 30 s")
+    return card(_HScroll(inner), title="Casts pro 30 s")
 
 
 def boss_detail(block: BossBlock, has_comparators: bool) -> QWidget:

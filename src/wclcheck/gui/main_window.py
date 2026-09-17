@@ -78,7 +78,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("wclcheck")
         self.resize(1180, 820)
-        self.setMinimumSize(900, 620)
+        self.setMinimumSize(780, 560)
 
         self.prefs: Prefs = load_prefs()
         self.worker: AnalysisWorker | None = None

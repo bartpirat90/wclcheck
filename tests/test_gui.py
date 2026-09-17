@@ -53,6 +53,33 @@ def test_findings_card_without_comparators_explains_itself(app):
     assert any("Vergleichsspieler" in t for t in texts)
 
 
+def test_narrow_table_scrolls_instead_of_cutting_labels(app):
+    """Zu wenig Platz darf die Beschriftungsspalte nicht auf „…“ eindampfen."""
+    block = build_boss_block(_raid_result(True).bosses[0], 8.0)
+    widget = table(block.general)
+    widget.show()  # ohne show richtet Qt das Innere der Tabelle nicht neu aus
+    labels = widget.sizeHintForColumn(0)
+
+    widget.resize(1400, widget.height())
+    app.processEvents()
+    wide = widget.height()
+    assert widget.horizontalScrollBar().maximum() == 0  # alles sichtbar
+
+    widget.resize(180, widget.height())
+    app.processEvents()
+
+    assert widget.columnWidth(0) >= labels
+    assert widget.horizontalScrollBar().maximum() > 0  # scrollt selbst
+    assert widget.height() > wide  # Platz für die Bildlaufleiste kam dazu
+
+
+def test_detail_page_fits_into_a_narrow_window(app):
+    """Keine Spalte und keine Linkzeile darf die ganze Seite breit halten."""
+    boss = _raid_result(True).bosses[0]
+    page = boss_detail(build_boss_block(boss, 8.0), has_comparators=True)
+    assert page.minimumSizeHint().width() <= 520
+
+
 def test_boss_detail_builds_all_sections(app):
     boss = _raid_result(True).bosses[0]
     page = boss_detail(build_boss_block(boss, 8.0), has_comparators=True)
