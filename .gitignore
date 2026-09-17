@@ -1,0 +1,19 @@
+# Zugangsdaten niemals einchecken
+config.toml
+*.secret
+.env
+
+# Python / uv
+__pycache__/
+*.pyc
+.venv/
+dist/
+build/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+uv.lock.bak
+
+# Lokale Ausgaben
+*.md.out
+raid.md

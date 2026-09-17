@@ -1,0 +1,39 @@
+[project]
+name = "wclcheck"
+version = "0.1.0"
+description = "Warcraft-Logs-Analyse: Warlock-Kills gegen Top-Spieler derselben Spec vergleichen"
+authors = [{ name = "Franz Petschull", email = "franz.petschull@gmail.com" }]
+requires-python = ">=3.12"
+dependencies = [
+    "httpx>=0.27",
+    "pydantic>=2.7",
+    "rich>=13.7",
+    "typer>=0.12",
+    "platformdirs>=4.2",
+]
+
+[project.scripts]
+wclcheck = "wclcheck.cli:app"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.2",
+    "ruff>=0.6",
+]
+
+[build-system]
+requires = ["uv_build>=0.12.15,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "live: benötigt WCL-Zugangsdaten und spricht die echte API an",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
