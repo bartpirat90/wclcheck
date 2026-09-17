@@ -12,8 +12,14 @@ dependencies = [
     "platformdirs>=4.2",
 ]
 
+[project.optional-dependencies]
+gui = ["PySide6>=6.7"]
+
 [project.scripts]
 wclcheck = "wclcheck.cli:app"
+
+[project.gui-scripts]
+wclcheck-gui = "wclcheck.gui:main"
 
 [dependency-groups]
 dev = [

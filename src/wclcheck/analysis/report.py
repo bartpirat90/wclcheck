@@ -203,12 +203,18 @@ def analyze_raid(
     fights: list[Fight],
     opts: Options,
     progress: Progress | None = None,
+    on_boss: Callable[[BossResult], None] | None = None,
 ) -> RaidResult:
+    """`on_boss` wird nach jedem fertigen Boss aufgerufen, damit Oberflächen die
+    Ergebnisse schon während des Laufs anzeigen können."""
     bosses: list[BossResult] = []
     errors: list[str] = []
     for fight in fights:
         try:
-            bosses.append(analyze_boss(client, report, fight, actor, opts, progress))
+            boss = analyze_boss(client, report, fight, actor, opts, progress)
+            bosses.append(boss)
+            if on_boss is not None:
+                on_boss(boss)
         except WCLError as exc:
             # Ein Boss darf die fertigen Ergebnisse der anderen nicht verwerfen.
             log.warning("Fight %s (%s) nicht analysierbar: %s", fight.id, fight.name, exc)

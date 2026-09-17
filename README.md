@@ -8,9 +8,11 @@ gestellt und die konkreten Abweichungen ausgegeben. Nur Warlock, Specs **Demonol
 ## Installation
 
 ```bash
-uv sync
+uv sync --extra gui
 uv run wclcheck --version
 ```
+
+Ohne Oberfläche reicht `uv sync`; `--extra gui` zieht zusätzlich PySide6 für das Fenster.
 
 Beim ersten Start wird `~/.config/wclcheck/config.toml` angelegt. Dort Client-ID und
 Client-Secret eines WCL-API-Clients eintragen (<https://www.warcraftlogs.com/api/clients/>),
@@ -41,6 +43,21 @@ wclcheck qCZ2bPkFVzgc46Lp --debug                                 # Rate-Limit, 
 
 Ohne `--fights` werden alle abgeschlossenen Boss-Kills analysiert, in denen der Spieler
 dabei war. Laufende Fights eines Live-Logs werden übersprungen.
+
+## Fenster
+
+```bash
+uv run wclcheck-gui
+```
+
+Unter Windows startet `start-wclcheck.cmd` dasselbe Fenster ohne Konsole; eine Verknüpfung
+davon auf dem Desktop genügt für den Doppelklick. Adresse des Reports oben einfügen, auf
+*Analysieren* klicken. Jeder fertige Boss erscheint sofort in der Liste links, rechts stehen
+zuerst die Befunde, darunter dieselben Tabellen wie im Terminal. *Speichern …* legt den
+Markdown-Bericht ab, *Einstellungen* ändert Spieler, Region, Anzahl Vergleichsspieler,
+Ilvl-Toleranz und Schwellwert. Diese Einstellungen liegen in der Registry unter
+`HKCU\Software\wclcheck`, nicht in der `config.toml`; dort stehen weiterhin nur die
+Zugangsdaten.
 
 ## Ausgabe pro Boss
 
