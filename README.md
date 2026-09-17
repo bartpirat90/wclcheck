@@ -50,8 +50,11 @@ dabei war. Laufende Fights eines Live-Logs werden übersprungen.
 uv run wclcheck-gui
 ```
 
-Unter Windows startet `start-wclcheck.cmd` dasselbe Fenster ohne Konsole; eine Verknüpfung
-davon auf dem Desktop genügt für den Doppelklick. Adresse des Reports oben einfügen, auf
+Unter Windows startet `start-wclcheck.cmd` dasselbe Fenster ohne Konsole. Für den
+Doppelklick genügt eine Verknüpfung auf dem Desktop: als Ziel entweder diese Datei oder
+direkt `.venv\Scripts\wclcheck-gui.exe`, als Symbol `src\wclcheck\gui\wclcheck.ico`.
+
+Adresse des Reports oben einfügen, auf
 *Analysieren* klicken. Jeder fertige Boss erscheint sofort in der Liste links, rechts stehen
 zuerst die Befunde, darunter dieselben Tabellen wie im Terminal. *Speichern …* legt den
 Markdown-Bericht ab, *Einstellungen* ändert Spieler, Region, Anzahl Vergleichsspieler,
