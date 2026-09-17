@@ -5,6 +5,9 @@
 - Geschätzter Schadenswert = Median(Schaden der Vergleichsspieler) − Schaden des Spielers,
   sofern die Metrik einen Schadenswert trägt (`MetricRow.damage`). Befunde ohne Schadenswert
   werden nach der prozentualen Abweichung sortiert und hinter die bewerteten gestellt.
+- Zeilen derselben Fähigkeit (z. B. Shadowburn-Casts und Shadowburn-Schaden) tragen denselben
+  Schadenswert und würden sonst zwei Befunde belegen; sie werden zu einem Befund verschmolzen,
+  die Zählzeile führt, die Schadenszeile wird in Klammern angehängt.
 """
 
 from __future__ import annotations
@@ -116,9 +119,28 @@ def derive_findings(
     total_damage: float | None = None,
     max_findings: int = 6,
 ) -> list[Finding]:
+    hits = [
+        c for c in comparisons
+        if c.compare and c.lever and c.worse and c.exceeds(threshold_pct)
+    ]
+    # Zeilen mit identischem Schadenswert gehören zur selben Fähigkeit: die Zählzeile (ohne
+    # Einheit) führt, alle weiteren werden an sie angehängt statt eigene Befunde zu belegen.
+    groups: dict[float, list[Comparison]] = {}
+    for c in hits:
+        if c.damage_delta is not None and c.damage_delta > 0:
+            groups.setdefault(c.damage_delta, []).append(c)
+    merged: dict[str, list[Comparison]] = {}
+    skip: set[str] = set()
+    for members in groups.values():
+        if len(members) < 2:
+            continue
+        primary = next((m for m in members if m.unit == ""), members[0])
+        merged[primary.key] = [m for m in members if m is not primary]
+        skip.update(m.key for m in members if m is not primary)
+
     candidates: list[Finding] = []
-    for c in comparisons:
-        if not c.compare or not c.lever or not c.worse or not c.exceeds(threshold_pct):
+    for c in hits:
+        if c.key in skip:
             continue
         dmg = c.damage_delta
         if dmg is not None and dmg <= 0:
@@ -127,6 +149,13 @@ def derive_findings(
         text = f"{c.label}: {c.formatted_player()} vs. {c.formatted_median()} (Median)"
         if dmg is not None:
             text += f" – ~{dmg / 1e6:.1f}m Schaden"
+            extras = [
+                (f"{d.formatted_player()} vs. {d.formatted_median()}" if d.unit == "m"
+                 else f"{d.label} {d.formatted_player()} vs. {d.formatted_median()}")
+                for d in merged.get(c.key, [])
+            ]
+            if extras:
+                text += f" ({'; '.join(extras)})"
             if dmg_pct is not None:
                 text += f", ~{dmg_pct:.0f} %"
         else:

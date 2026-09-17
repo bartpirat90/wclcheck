@@ -13,7 +13,7 @@ class MetricRow:
     key: str  # stabiler Schlüssel, z. B. "demo.hog.casts"
     label: str  # deutsche Beschriftung
     value: float | None  # numerischer Wert (None = nicht ermittelbar)
-    unit: str = ""  # "", "s", "%", "m" (Millionen Schaden), "x" (Faktor)
+    unit: str = ""  # "", "s", "%", "m" (Millionen Schaden), "k" (Tausend), "x" (Faktor)
     better: Better = "higher"  # Richtung, in der ein höherer Wert besser ist
     damage: float | None = None  # zugehöriger Gesamtschaden (absolut) für die Befund-Gewichtung
     detail: str = ""  # Zusatzinfo für die Ausgabe (Zeitpunkte, Listen)
@@ -29,6 +29,8 @@ def format_value(value: float | None, unit: str = "") -> str:
         return "–"
     if unit == "m":
         return f"{value / 1e6:.2f}m"
+    if unit == "k":
+        return f"{value / 1e3:.0f}k"
     if unit == "%":
         return f"{value:.0f} %"
     if unit == "s":

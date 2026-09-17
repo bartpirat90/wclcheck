@@ -569,7 +569,7 @@ class DemoMetrics:
             ),
             MetricRow(
                 "demo.ritual.damage_per_proc", "Diabolic Ritual – Schaden pro Proc",
-                _ratio(self.ritual_damage, self.ritual_procs), "", "higher",
+                _ratio(self.ritual_damage, self.ritual_procs), "k", "higher",
                 damage=self.ritual_damage,
                 detail=f"gesamt {self.ritual_damage / 1e6:.2f}m",
             ),
@@ -625,7 +625,8 @@ def compute_demo(data: FightData, general: GeneralMetrics) -> DemoMetrics:
     # --- Unbekannte Summon-/Buff-IDs loggen, nicht raten
     known_summons = (
         {spells.WILD_IMP_HOG_SUMMON, spells.WILD_IMP_INNER_DEMONS_SUMMON,
-         spells.SUMMON_DEMONIC_TYRANT, spells.GRIMOIRE_IMP_LORD, spells.SUMMON_GLOOMHOUND}
+         spells.SUMMON_DEMONIC_TYRANT, spells.GRIMOIRE_IMP_LORD, spells.SUMMON_GLOOMHOUND,
+         spells.SUMMON_CHARHOUND}
         | spells.CALL_DREADSTALKERS_SUMMON
         | spells.DIABOLIC_RITUAL_SUMMONS
         | spells.ARGUS_SUMMONS

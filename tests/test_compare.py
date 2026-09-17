@@ -73,3 +73,20 @@ def test_raid_levers_aggregate_by_key():
     assert levers[0].damage_total == 14e6 + 9e6
     assert "auf 2 Bossen" in levers[0].text
     assert {lv.key for lv in levers} == {"x.casts", "g.gaps", "g.potions"}
+
+
+def test_count_and_damage_row_of_same_ability_merge_into_one_finding():
+    from wclcheck.analysis.rows import MetricRow
+
+    def pair(casts, dmg):
+        return [
+            MetricRow("d.sb.casts", "Shadowburn-Casts", casts, "", "higher", damage=dmg),
+            MetricRow("d.sb.damage", "Shadowburn-Schaden", dmg, "m", "higher", damage=dmg),
+        ]
+
+    comps = compare_rows(pair(36, 7e6), [pair(75, 18e6), pair(67, 14e6), pair(69, 13e6)])
+    findings = derive_findings(comps, total_damage=70e6)
+    assert [f.key for f in findings] == ["d.sb.casts"]
+    assert findings[0].text == (
+        "Shadowburn-Casts: 36 vs. 69 (Median) – ~7.0m Schaden (7.00m vs. 14.00m), ~10 %"
+    )

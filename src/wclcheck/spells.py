@@ -105,6 +105,9 @@ UTILITY: frozenset[int] = frozenset(
         1295132,  # Liquid Luster (On-Use-Item)
         1293316,  # Empowering Venom (Raid-Buff-Proc)
         1236616,  # Light's Potential (Raid-Buff-Proc)
+        1263768,  # Light's Blessing (Raid-Buff-Proc)
+        132411,  # Singe Magic (Imp-Befehl)
+        111771,  # Demonic Gateway
         # Racials
         265221,  # Fireblood
         28730,  # Arcane Torrent
@@ -264,6 +267,7 @@ DEMONIC_ART_PIT_LORD_BUFF = 432795  # Demonic Art: Pit Lord
 # Summon-Events (sourceID = Spieler, targetID = Pet-Actor, targetInstance = laufende Nummer)
 CALL_DREADSTALKERS_SUMMON: frozenset[int] = frozenset({193331, 193332})  # 2 pro Cast
 SUMMON_GLOOMHOUND = 455465  # Summon Gloomhound
+SUMMON_CHARHOUND = 455476  # Summon Charhound (Schwester-Talent zu Gloomhound)
 SUMMON_OVERLORD = 428571  # Summon Overlord (Diabolic Ritual)
 SUMMON_MOTHER_OF_CHAOS = 428565  # Summon Mother of Chaos (Diabolic Ritual)
 SUMMON_PIT_LORD = 434400  # Summon Pit Lord (Diabolic Ritual) – Proc-Quelle für Ruination
