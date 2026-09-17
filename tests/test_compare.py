@@ -55,6 +55,14 @@ def test_findings_respect_threshold_direction_and_limit():
     assert len(derive_findings(compare_rows(many, many_others), max_findings=6)) == 6
 
 
+def test_non_lever_rows_compare_but_never_become_findings():
+    player = [MetricRow("g.dps", "DPS", 100, "", "higher", lever=False)]
+    others = [[MetricRow("g.dps", "DPS", 200, "", "higher", lever=False)]]
+    comps = compare_rows(player, others)
+    assert comps[0].delta_pct == -50 and comps[0].worse
+    assert derive_findings(comps) == []
+
+
 def test_raid_levers_aggregate_by_key():
     player = rows(36, 20e6, 101, potions=0)
     others = [rows(60, 33e6, 40), rows(63, 35e6, 30)]

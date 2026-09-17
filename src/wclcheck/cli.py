@@ -64,6 +64,18 @@ def parse_fight_list(value: str | None) -> list[int] | None:
     return ids or None
 
 
+def parse_regions(value: str) -> frozenset[str]:
+    """'EU', 'US', 'EU,US' oder 'ALL' → Menge der zugelassenen Regionen."""
+    v = value.strip().upper()
+    if v in ("ALL", "*", ""):
+        return frozenset({"EU", "US", "KR", "TW", "CN"})
+    regions = frozenset(p.strip() for p in v.replace("+", ",").split(",") if p.strip())
+    bad = regions - {"EU", "US", "KR", "TW", "CN"}
+    if bad:
+        raise typer.BadParameter(f"Unbekannte Region(en): {', '.join(sorted(bad))}")
+    return regions
+
+
 def _fmt_duration(seconds: float) -> str:
     m, s = divmod(int(round(seconds)), 60)
     return f"{m}:{s:02d}"
@@ -183,23 +195,40 @@ def main(
             f for f in rep.kills() if f.is_complete and actor.id in f.friendlyPlayers
         ]
 
-    print_report_overview(rep, actor, [f.id for f in selected])
+    if format == "terminal":
+        print_report_overview(rep, actor, [f.id for f in selected])
 
-    from .analysis.loader import load_fight_data
-    from .analysis.metrics import compute_general
-    from .output import print_general
+    running = [f for f in selected if f.inProgress]
+    for f in running:
+        err_console.print(f"[yellow]Fight {f.id} ({f.name}) läuft noch, übersprungen.[/yellow]")
+    selected = [f for f in selected if not f.inProgress]
+    if not selected:
+        err_console.print("[yellow]Keine abgeschlossenen Kills mit diesem Spieler.[/yellow]")
+        raise typer.Exit(code=0)
 
-    for fight in selected:
-        if fight.inProgress:
-            err_console.print(f"[yellow]Fight {fight.id} läuft noch, übersprungen.[/yellow]")
-            continue
-        try:
-            data = load_fight_data(client, rep, fight, actor)
-        except (WCLError, AuthError) as exc:
-            err_console.print(f"[red]Fight {fight.id}: {exc}[/red]")
-            continue
-        metrics = compute_general(data)
-        print_general(console, fight, metrics, data.ability_names)
+    from .analysis.report import Options, analyze_raid
+    from .output import render_markdown, render_terminal
+
+    opts = Options(
+        comparators=comparators,
+        ilvl_tolerance=ilvl_tolerance,
+        threshold_pct=threshold,
+        regions=parse_regions(region or settings.region),
+    )
+
+    def progress(msg: str) -> None:
+        err_console.print(f"[dim]… {msg}[/dim]")
+
+    try:
+        result = analyze_raid(client, rep, actor, selected, opts, progress)
+    except (WCLError, AuthError) as exc:
+        err_console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from None
+
+    if format == "md":
+        sys.stdout.write(render_markdown(result))
+    else:
+        render_terminal(result, console)
 
     if debug and client.last_rate_limit:
         rl = client.last_rate_limit

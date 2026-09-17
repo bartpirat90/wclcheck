@@ -17,7 +17,8 @@ class MetricRow:
     better: Better = "higher"  # Richtung, in der ein höherer Wert besser ist
     damage: float | None = None  # zugehöriger Gesamtschaden (absolut) für die Befund-Gewichtung
     detail: str = ""  # Zusatzinfo für die Ausgabe (Zeitpunkte, Listen)
-    compare: bool = True  # in den Vergleich/Befunde aufnehmen
+    compare: bool = True  # in den Vergleich aufnehmen (Median, Δ %)
+    lever: bool = True  # als Befund/Hebel zulässig (False für Ergebnisgrößen wie DPS)
 
     def formatted(self) -> str:
         return format_value(self.value, self.unit)

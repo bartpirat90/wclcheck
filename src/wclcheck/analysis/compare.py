@@ -31,6 +31,7 @@ class Comparison:
     detail_player: str = ""
     details_others: list[str] = field(default_factory=list)
     compare: bool = True
+    lever: bool = True
 
     @property
     def damage_delta(self) -> float | None:
@@ -102,6 +103,7 @@ def compare_rows(
                 detail_player=row.detail,
                 details_others=[m.detail if m else "" for m in matched],
                 compare=row.compare,
+                lever=row.lever,
             )
         )
     return out
@@ -116,7 +118,7 @@ def derive_findings(
 ) -> list[Finding]:
     candidates: list[Finding] = []
     for c in comparisons:
-        if not c.compare or not c.worse or not c.exceeds(threshold_pct):
+        if not c.compare or not c.lever or not c.worse or not c.exceeds(threshold_pct):
             continue
         dmg = c.damage_delta
         if dmg is not None and dmg <= 0:

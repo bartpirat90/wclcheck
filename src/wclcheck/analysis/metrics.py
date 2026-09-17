@@ -79,9 +79,10 @@ class GeneralMetrics:
         # Letztes Fenster ist kürzer und verzerrt den Median
         windows = sorted(self.casts_per_30s[:-1] or self.casts_per_30s)
         return [
-            MetricRow("general.dps", "DPS", self.dps, "", "higher", damage=self.total_damage),
+            MetricRow("general.dps", "DPS", round(self.dps), "", "higher",
+                      damage=self.total_damage, lever=False),
             MetricRow("general.damage", "Gesamtschaden", self.total_damage, "m", "higher",
-                      damage=self.total_damage),
+                      damage=self.total_damage, lever=False),
             MetricRow("general.casts", "Spieler-Casts", self.casts_total, "", "higher"),
             MetricRow("general.casts_30s_median", "Casts / 30 s (Median)",
                       statistics.median(windows) if windows else None, "", "higher"),
