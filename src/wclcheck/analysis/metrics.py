@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import statistics
 from collections import Counter
 from dataclasses import dataclass, field
 from typing import Any
@@ -21,6 +22,7 @@ from .casts import (
     reaction_times,
 )
 from .loader import FightData
+from .rows import MetricRow
 from .spec import SpecInfo, detect_spec
 
 TRINKET_SLOTS = (12, 13)
@@ -70,6 +72,49 @@ class GeneralMetrics:
     @property
     def cancelled_by_ability(self) -> Counter[int]:
         return Counter(c.ability for c in self.cancelled)
+
+    def rows(self) -> list[MetricRow]:
+        """Kernmetriken (beide Specs) im gemeinsamen Zeilenformat."""
+        r = self.reaction
+        # Letztes Fenster ist kürzer und verzerrt den Median
+        windows = sorted(self.casts_per_30s[:-1] or self.casts_per_30s)
+        return [
+            MetricRow("general.dps", "DPS", self.dps, "", "higher", damage=self.total_damage),
+            MetricRow("general.damage", "Gesamtschaden", self.total_damage, "m", "higher",
+                      damage=self.total_damage),
+            MetricRow("general.casts", "Spieler-Casts", self.casts_total, "", "higher"),
+            MetricRow("general.casts_30s_median", "Casts / 30 s (Median)",
+                      statistics.median(windows) if windows else None, "", "higher"),
+            MetricRow("general.gaps_count", "Lücken > 2,5 s", self.gaps.count, "", "lower"),
+            MetricRow("general.gaps_total", "Lücken gesamt", self.gaps.total_s, "s", "lower"),
+            MetricRow("general.cancelled", "Abgebrochene Casts", len(self.cancelled), "", "lower"),
+            MetricRow("general.reaction_median", "Reaktion nach Instant (Median)",
+                      r.median_s, "s", "lower"),
+            MetricRow("general.reaction_p90", "Reaktion nach Instant (P90)", r.p90_s, "s", "lower"),
+            MetricRow("general.gcd", "GCD (geschätzt)", r.gcd_estimate_s, "s", "neutral",
+                      compare=False),
+            MetricRow("general.active_pct", "Aktivzeit", self.active_pct, "%", "higher"),
+            MetricRow("general.potions", "Kampftränke", len(self.potions_s), "", "higher",
+                      detail=", ".join(f"{s:.0f} s" for s in self.potions_s)),
+            MetricRow("general.deaths", "Tode", self.deaths, "", "lower"),
+            MetricRow("general.parse", "Parse", self.parse_percent, "%", "neutral", compare=False),
+            MetricRow("general.ilvl", "Ilvl", self.ilvl, "", "neutral", compare=False),
+        ]
+
+    def gear_rows(self) -> list[MetricRow]:
+        g = self.gear
+        return [
+            MetricRow("gear.ilvl", "Ilvl", g.ilvl, "", "neutral", compare=False),
+            MetricRow("gear.int", "Int", g.intellect, "", "neutral", compare=False),
+            MetricRow("gear.crit", "Crit", g.crit, "", "neutral", compare=False),
+            MetricRow("gear.haste", "Haste", g.haste, "", "neutral", compare=False),
+            MetricRow("gear.mastery", "Mastery", g.mastery, "", "neutral", compare=False),
+            MetricRow("gear.vers", "Vers", g.versatility, "", "neutral", compare=False),
+            MetricRow("gear.set", "Set-Teile", g.set_pieces, "", "neutral", compare=False),
+            MetricRow("gear.enchants", "Enchants", g.enchants, "", "neutral", compare=False),
+            MetricRow("gear.trinkets", "Trinkets", None, "", "neutral", compare=False,
+                      detail=", ".join(f"{i} ({lvl})" for i, lvl in g.trinkets) or "–"),
+        ]
 
 
 def _stat(ci: dict[str, Any], key: str) -> int | None:

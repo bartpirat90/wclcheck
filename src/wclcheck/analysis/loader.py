@@ -26,6 +26,13 @@ class FightData:
     summon_events: list[dict[str, Any]]
     damage_table: list[dict[str, Any]]
     summary: dict[str, Any]
+    # Debuffs, die der Spieler auf Gegnern hat (Wither, Havoc, Shadowburn). WCL-Semantik:
+    # dataType Debuffs + hostilityType Enemies + targetID = Spieler.
+    debuff_events: list[dict[str, Any]] = field(default_factory=list)
+    # resourcechange-Events des Spielers (resourceChangeType 7 = Soul Shards, Feld `waste`)
+    resource_events: list[dict[str, Any]] = field(default_factory=list)
+    # Tode von Gegnern (targetID, targetInstance, killerID) für Kill-Resets (Shadowburn)
+    enemy_death_events: list[dict[str, Any]] = field(default_factory=list)
     damage_events: list[dict[str, Any]] | None = None
     parse_percent: float | None = None
     rank_meta: dict[str, Any] = field(default_factory=dict)
@@ -87,6 +94,11 @@ def load_fight_data(
             .get("entries", [])
         ),
         summary=client.table(code, fight, "Summary", source_id=actor.id),
+        debuff_events=client.events(
+            code, fight, "Debuffs", target_id=actor.id, hostility_type="Enemies"
+        ),
+        resource_events=client.events(code, fight, "Resources", source_id=actor.id),
+        enemy_death_events=client.events(code, fight, "Deaths", hostility_type="Enemies"),
     )
     if with_damage_events:
         data.damage_events = client.events(code, fight, "DamageDone", source_id=actor.id)
