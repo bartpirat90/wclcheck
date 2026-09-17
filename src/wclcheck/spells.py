@@ -32,7 +32,6 @@ FEL_FIREBOLT = 104318  # Fel Firebolt (Wild Imp)
 
 # Buffs (targetID = Spieler)
 DEMONIC_CORE_BUFF = 264173  # Demonic Core
-DEMONIC_POWER_BUFF = 265273  # Demonic Power (Tyrant aktiv)
 DOMINION_OF_ARGUS_BUFF = 1276166  # Dominion of Argus (Portalfenster, Spieler; Schaden = 1276222)
 
 # --------------------------------------------------------------------------- Destruction
@@ -61,12 +60,11 @@ HAVOC_DEBUFF = 80240  # Havoc-Debuff (gleiche ID wie Cast)
 BACKDRAFT_BUFF = 117828  # Backdraft
 FIENDISH_CRUELTY_BUFF = 1245664  # Fiendish Cruelty (Shadowburn-Proc)
 MALEVOLENCE_BUFF = 442726  # Malevolence (Fenster aktiv)
-SUMMON_INFERNAL_BUFF = 111685  # Summon Infernal (Infernal aktiv)
-CRASHING_CHAOS_BUFF = 417282  # Crashing Chaos
-FLASHPOINT_BUFF = 387263  # Flashpoint
 
 # --------------------------------------------------------------------------- Utility
 # Alles hier zählt NICHT als Spieler-Cast (Rotationszähler, Lücken, Casts/30 s).
+POTION_OF_RECKLESSNESS = 1236994  # Potion of Recklessness (Cast- und Buff-ID identisch)
+
 UTILITY: frozenset[int] = frozenset(
     {
         108416,  # Dark Pact
@@ -100,7 +98,7 @@ UTILITY: frozenset[int] = frozenset(
         30146,  # Summon Felguard
         366222,  # Summon Sayaad
         1295247,  # Concentrated Silvermoon Health Potion
-        1236994,  # Potion of Recklessness (Kampftrank; separat als Metrik ausgewertet)
+        POTION_OF_RECKLESSNESS,  # Kampftrank; separat als Metrik ausgewertet
         1250533,  # Freightrunner's Flask (On-Use-Item)
         1295132,  # Liquid Luster (On-Use-Item)
         1293316,  # Empowering Venom (Raid-Buff-Proc)
@@ -182,15 +180,8 @@ DESTRO_MARKERS: frozenset[int] = frozenset({CHAOS_BOLT, WITHER, IMMOLATE})
 DIABOLIST_MARKERS: frozenset[int] = frozenset({RUINATION, INFERNAL_BOLT, DIABOLIC_RITUAL})
 HELLCALLER_MARKERS: frozenset[int] = frozenset({WITHER, MALEVOLENCE})
 
-# Zauber, die laut Spec als Instants für die Reaktionszeit gelten (zusätzlich zu allen
-# Casts mit gemessener Castdauer < 0,5 s, z. B. Demonbolt mit Core).
-INSTANT_CANDIDATES: frozenset[int] = frozenset(
-    {DEMONBOLT, IMPLOSION, CALL_DREADSTALKERS, CONFLAGRATE, SHADOWBURN, MALEVOLENCE}
-)
-
 # Spieler-Buffs, die als "Combat Potion" gelten. Schauderbart hat im Referenz-Report keinen
 # Kampftrank benutzt; die ID stammt aus den Vergleichslogs (Ugofan, Moriwl, Ninesecrets).
-POTION_OF_RECKLESSNESS = 1236994  # Potion of Recklessness (Cast- und Buff-ID identisch)
 COMBAT_POTION_BUFFS: frozenset[int] = frozenset({POTION_OF_RECKLESSNESS})
 
 # Anzeige-Namen (nur Ausgabe, nie Matching)
@@ -234,7 +225,6 @@ NAMES: dict[int, str] = {
     BACKDRAFT_BUFF: "Backdraft",
 }
 
-
 def name(spell_id: int, fallback: dict[int, str] | None = None) -> str:
     """Anzeigename: eigene Tabelle, sonst Name aus dem Report, sonst die ID."""
     if spell_id in NAMES:
@@ -243,7 +233,6 @@ def name(spell_id: int, fallback: dict[int, str] | None = None) -> str:
         return fallback[spell_id]
     return f"#{spell_id}"
 
-
 # --------------------------------------------------- Demo-Ergänzungen (Phase 3)
 # Alle IDs empirisch aus `masterData.abilities` bzw. den Events des Referenz-Reports
 # qCZ2bPkFVzgc46Lp (Fight 22, Actor 3) bestätigt. Namen nur als Kommentar.
@@ -251,22 +240,10 @@ def name(spell_id: int, fallback: dict[int, str] | None = None) -> str:
 # Portal-Buff auf dem Spieler nach jedem Tyrant (Alias von DOMINION_OF_ARGUS_BUFF).
 # Trägt Stacks (1 → 2 → 1, jeder Abbau = ein Argus-Dämon); Schaden läuft unter 1276222.
 DOMINION_OF_ARGUS_PORTAL_BUFF = DOMINION_OF_ARGUS_BUFF
-DOMINION_OF_ARGUS_ENERGIZE = 1276318  # Dominion of Argus (Shard-Gewinn)
 
 # Spieler-Buffs rund um Tyrant und Diabolic Ritual
-SUMMON_DEMONIC_TYRANT_BUFF = 265187  # Summon Demonic Tyrant (Tyrant aktiv)
-TYRANTS_OBLATION_BUFF = 1276767  # Tyrant's Oblation
-ABYSSAL_DOMINION_BUFF = 456323  # Abyssal Dominion
-IMP_GANG_BOSS_BUFF = 1250772  # Imp Gang Boss
-IMP_LORD_BUFF = 1288945  # Imp Lord (Grimoire aktiv)
 RUINATION_BUFF = 433885  # Ruination (Proc bereit)
 INFERNAL_BOLT_BUFF = 433891  # Infernal Bolt (Proc bereit)
-DIABOLIC_RITUAL_OVERLORD_BUFF = 431944  # Diabolic Ritual: Overlord
-DIABOLIC_RITUAL_MOTHER_BUFF = 432815  # Diabolic Ritual: Mother of Chaos
-DIABOLIC_RITUAL_PIT_LORD_BUFF = 432816  # Diabolic Ritual: Pit Lord
-DEMONIC_ART_OVERLORD_BUFF = 428524  # Demonic Art: Overlord
-DEMONIC_ART_MOTHER_BUFF = 432794  # Demonic Art: Mother of Chaos
-DEMONIC_ART_PIT_LORD_BUFF = 432795  # Demonic Art: Pit Lord
 
 # Summon-Events (sourceID = Spieler, targetID = Pet-Actor, targetInstance = laufende Nummer)
 CALL_DREADSTALKERS_SUMMON: frozenset[int] = frozenset({193331, 193332})  # 2 pro Cast
@@ -299,9 +276,6 @@ INFERNAL_BOLT_DAMAGE = 434506  # Infernal Bolt – unter guid 686 (Shadow Bolt)
 SHADOW_BOLT_DAMAGE = 686  # Shadow Bolt – unter guid 686
 BURNING_CLEAVE = 1264093  # Burning Cleave (Demonic Tyrant)
 MIND_SEAR = 1280460  # Mind Sear (Antoran Inquisitor)
-SHADOW_NOVA = 1282507  # Shadow Nova (Lady Sacrolash)
-SOUL_BARRAGE = 1292391  # Soul Barrage (Antoran Jailer)
-BLAZE = 1282534  # Blaze (Grand Warlock Alythess)
 GREATER_FELBOLT = 1277116  # Greater Felbolt (Imp Lord)
 
 NAMES.update(
@@ -325,7 +299,6 @@ NAMES.update(
     }
 )
 
-
 # --- Destro-Ergänzungen (Phase 4) -------------------------------------------
 # Alle IDs empirisch aus Fight 17 (Entombed Sentinels) des Referenz-Reports
 # qCZ2bPkFVzgc46Lp bestätigt: DamageDone-Events + Debuff-Events, nie über Namen.
@@ -344,8 +317,6 @@ INFERNAL_IMMOLATION_DAMAGE = 20153  # Immolation (Aura des Infernals)
 INFERNAL_AWAKENING_DAMAGE = 22703  # Infernal Awakening
 CHAOS_BOLT_OVERFIEND_DAMAGE = 434589  # Chaos Bolt des Overfiends
 SUMMON_OVERFIEND_DAMAGE = 434587  # Summen-Eintrag des Overfiends in der Tabelle
-SUMMON_OVERFIEND_BUFF = 457578  # Overfiend aktiv (liefert nur resourcechange mit 0)
-REVERSE_ENTROPY_BUFF = 266030  # Reverse Entropy (Haste-Proc)
 
 # Shard-Spender bzw. -Erzeuger der Destro-Rotation (Basis für Overcap-Näherung).
 DESTRO_SPENDERS: frozenset[int] = frozenset({CHAOS_BOLT, SHADOWBURN, RAIN_OF_FIRE})

@@ -90,3 +90,33 @@ def test_count_and_damage_row_of_same_ability_merge_into_one_finding():
     assert findings[0].text == (
         "Shadowburn-Casts: 36 vs. 69 (Median) – ~7.0m Schaden (7.00m vs. 14.00m), ~10 %"
     )
+
+
+def test_rows_without_unique_count_row_are_not_merged():
+    from wclcheck.analysis.rows import MetricRow
+
+    def pair(uptime, dmg):
+        return [
+            MetricRow("d.wither.uptime", "Wither-Uptime", uptime, "%", "higher", damage=dmg),
+            MetricRow("d.wither.damage", "Wither-Schaden", dmg, "m", "higher", damage=dmg),
+        ]
+
+    comps = compare_rows(pair(70, 5e6), [pair(89, 8e6), pair(90, 8e6), pair(88, 8e6)])
+    assert {f.key for f in derive_findings(comps, total_damage=70e6)} == {
+        "d.wither.uptime", "d.wither.damage"
+    }
+
+
+def test_explicit_group_overrides_key_prefix():
+    from wclcheck.analysis.rows import MetricRow
+
+    def rows(casts, dmg):
+        return [
+            MetricRow("x.casts", "Casts", casts, "", "higher", damage=dmg, group="g"),
+            MetricRow("y.damage", "Schaden", dmg, "m", "higher", damage=dmg, group="g"),
+        ]
+
+    comps = compare_rows(rows(36, 7e6), [rows(70, 14e6)])
+    findings = derive_findings(comps, total_damage=70e6)
+    assert [f.key for f in findings] == ["x.casts"]
+    assert "(7.00m vs. 14.00m)" in findings[0].text

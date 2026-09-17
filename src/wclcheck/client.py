@@ -108,12 +108,15 @@ class WCLClient:
 
     # --------------------------------------------------------------------- Report
 
-    def report(self, code: str) -> Report:
+    def report(self, code: str, *, live: bool = True) -> Report:
+        """Report mit Fight-Liste. `live=True` (der analysierte Log) hält die Fight-Liste
+        höchstens 60 s im Cache; `live=False` (abgeschlossene Vergleichs-Reports aus den
+        Rankings) cacht dauerhaft."""
         data = self.cached_graphql(
             queries.REPORT,
             {"code": code},
             key_parts=(code, "report"),
-            max_age=self._max_age(code, FIGHTS_MAX_AGE_S),
+            max_age=self._max_age(code, FIGHTS_MAX_AGE_S if live else None),
         )
         raw = (data.get("reportData") or {}).get("report")
         if not raw:

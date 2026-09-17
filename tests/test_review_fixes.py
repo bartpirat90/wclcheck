@@ -211,7 +211,7 @@ def _report() -> Report:
 def test_load_comparator_returns_none_when_fight_data_fails(monkeypatch, settings, cache):
     rep = _report()
     client = _client(lambda r: httpx.Response(500), settings, cache)
-    monkeypatch.setattr(comparators_mod.WCLClient, "report", lambda self, code: rep)
+    monkeypatch.setattr(comparators_mod.WCLClient, "report", lambda self, code, **kw: rep)
     monkeypatch.setattr(
         comparators_mod, "load_fight_data",
         lambda *a, **k: (_ for _ in ()).throw(WCLError("GraphQL-Fehler: kaputt")),
@@ -258,3 +258,21 @@ def test_cache_if_skips_write(settings, cache):
     assert cache.get(DiskCache.key("k", DiskCache.key("query Q { x }"))) is None
     client.cached_graphql("query Q { x }", {}, key_parts=("k",))
     assert json.dumps(cache.get(DiskCache.key("k", DiskCache.key("query Q { x }")))) == '{"x": 1}'
+
+
+def test_comparator_reports_are_cached_permanently(monkeypatch, settings, cache):
+    seen = []
+    client = _client(lambda r: httpx.Response(500), settings, cache)
+
+    def fake_cached(query, variables, *, key_parts, max_age=None, cache_if=None):
+        seen.append(max_age)
+        return {"reportData": {"report": {
+            "code": variables["code"], "title": "T", "startTime": 0, "endTime": 1,
+            "fights": [], "masterData": {"actors": []}}}}
+
+    monkeypatch.setattr(client, "cached_graphql", fake_cached)
+    client.report("AAAAAAAAAAAAAAAA")
+    client.report("AAAAAAAAAAAAAAAA", live=False)
+    client.no_cache_codes.add("AAAAAAAAAAAAAAAA")
+    client.report("AAAAAAAAAAAAAAAA", live=False)
+    assert seen == [60, None, 0.0]

@@ -10,6 +10,8 @@ from ..client import WCLClient, WCLError
 from ..models import Actor, Fight, Report
 from .comparators import find_comparators, load_comparator
 from .compare import Comparison, Finding, Lever, compare_rows, derive_findings, raid_levers
+from .demo import compute_demo
+from .destro import compute_destro
 from .loader import FightData, load_fight_data
 from .metrics import GeneralMetrics, compute_general
 from .rankings import Criteria, RankingEntry, Selection, player_key
@@ -86,18 +88,11 @@ class RaidResult:
 
 
 def spec_rows_for(data: FightData, general: GeneralMetrics) -> list[MetricRow]:
-    """Spec-Metriken je nach erkannter Spec; Module werden erst hier importiert."""
-    try:
-        if general.spec.is_demo:
-            from .demo import compute_demo
-
-            return compute_demo(data, general).rows()
-        if general.spec.is_destro:
-            from .destro import compute_destro
-
-            return compute_destro(data, general).rows()
-    except ImportError as exc:  # Spec-Modul (noch) nicht vorhanden
-        log.warning("Spec-Metriken für %s nicht verfügbar: %s", general.spec.label, exc)
+    """Spec-Metriken je nach erkannter Spec; unbekannte Spec → keine Zeilen."""
+    if general.spec.is_demo:
+        return compute_demo(data, general).rows()
+    if general.spec.is_destro:
+        return compute_destro(data, general).rows()
     return []
 
 

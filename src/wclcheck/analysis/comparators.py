@@ -69,7 +69,7 @@ def _resolve_actor(report: Report, fight: Fight, entry: RankingEntry) -> Actor |
 def load_comparator(client: WCLClient, entry: RankingEntry) -> Comparator | None:
     """Lädt Report, Fight und Spieler eines Ranking-Eintrags; None bei Problemen (geloggt)."""
     try:
-        report = client.report(entry.report_code)
+        report = client.report(entry.report_code, live=False)
     except WCLError as exc:
         log.warning("Vergleichsreport %s nicht ladbar: %s", entry.report_code, exc)
         return None

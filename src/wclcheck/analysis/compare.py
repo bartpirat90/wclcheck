@@ -5,9 +5,10 @@
 - Geschätzter Schadenswert = Median(Schaden der Vergleichsspieler) − Schaden des Spielers,
   sofern die Metrik einen Schadenswert trägt (`MetricRow.damage`). Befunde ohne Schadenswert
   werden nach der prozentualen Abweichung sortiert und hinter die bewerteten gestellt.
-- Zeilen derselben Fähigkeit (z. B. Shadowburn-Casts und Shadowburn-Schaden) tragen denselben
-  Schadenswert und würden sonst zwei Befunde belegen; sie werden zu einem Befund verschmolzen,
-  die Zählzeile führt, die Schadenszeile wird in Klammern angehängt.
+- Zeilen derselben Fähigkeit (gleiche `MetricRow.group_key`, z. B. Shadowburn-Casts und
+  Shadowburn-Schaden) würden sonst mehrere Befunde belegen; schadensbewertete Treffer einer
+  Gruppe werden zu einem Befund verschmolzen, sofern die Gruppe genau eine Zählzeile (ohne
+  Einheit) enthält. Diese führt, die übrigen werden in Klammern angehängt.
 """
 
 from __future__ import annotations
@@ -35,6 +36,7 @@ class Comparison:
     details_others: list[str] = field(default_factory=list)
     compare: bool = True
     lever: bool = True
+    group: str = ""
 
     @property
     def damage_delta(self) -> float | None:
@@ -107,6 +109,7 @@ def compare_rows(
                 details_others=[m.detail if m else "" for m in matched],
                 compare=row.compare,
                 lever=row.lever,
+                group=row.group_key,
             )
         )
     return out
@@ -123,18 +126,19 @@ def derive_findings(
         c for c in comparisons
         if c.compare and c.lever and c.worse and c.exceeds(threshold_pct)
     ]
-    # Zeilen mit identischem Schadenswert gehören zur selben Fähigkeit: die Zählzeile (ohne
-    # Einheit) führt, alle weiteren werden an sie angehängt statt eigene Befunde zu belegen.
-    groups: dict[float, list[Comparison]] = {}
+    # Schadensbewertete Treffer derselben Fähigkeit: die Zählzeile (ohne Einheit) führt,
+    # alle weiteren werden an sie angehängt statt eigene Befunde zu belegen.
+    groups: dict[str, list[Comparison]] = {}
     for c in hits:
         if c.damage_delta is not None and c.damage_delta > 0:
-            groups.setdefault(c.damage_delta, []).append(c)
+            groups.setdefault(c.group, []).append(c)
     merged: dict[str, list[Comparison]] = {}
     skip: set[str] = set()
     for members in groups.values():
-        if len(members) < 2:
-            continue
-        primary = next((m for m in members if m.unit == ""), members[0])
+        leads = [m for m in members if m.unit == ""]
+        if len(members) < 2 or len(leads) != 1:
+            continue  # ohne eindeutige Zählzeile bleibt jede Zeile ein eigener Befund
+        primary = leads[0]
         merged[primary.key] = [m for m in members if m is not primary]
         skip.update(m.key for m in members if m is not primary)
 

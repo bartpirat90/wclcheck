@@ -19,6 +19,11 @@ class MetricRow:
     detail: str = ""  # Zusatzinfo für die Ausgabe (Zeitpunkte, Listen)
     compare: bool = True  # in den Vergleich aufnehmen (Median, Δ %)
     lever: bool = True  # als Befund/Hebel zulässig (False für Ergebnisgrößen wie DPS)
+    group: str = ""  # Zeilen derselben Fähigkeit; leer = Schlüssel ohne letztes Segment
+
+    @property
+    def group_key(self) -> str:
+        return self.group or self.key.rsplit(".", 1)[0]
 
     def formatted(self) -> str:
         return format_value(self.value, self.unit)
