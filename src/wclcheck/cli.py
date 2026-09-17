@@ -19,6 +19,17 @@ from .client import WCLClient, WCLError
 from .config import ConfigError, load_settings
 from .models import Actor, Report
 
+
+def _force_utf8() -> None:
+    """Windows-Konsolen laufen oft mit cp1252; wir geben immer UTF-8 aus."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
+        except (AttributeError, ValueError):
+            pass
+
+
+_force_utf8()
 app = typer.Typer(add_completion=False, no_args_is_help=True)
 console = Console()
 err_console = Console(stderr=True)
@@ -173,6 +184,22 @@ def main(
         ]
 
     print_report_overview(rep, actor, [f.id for f in selected])
+
+    from .analysis.loader import load_fight_data
+    from .analysis.metrics import compute_general
+    from .output import print_general
+
+    for fight in selected:
+        if fight.inProgress:
+            err_console.print(f"[yellow]Fight {fight.id} läuft noch, übersprungen.[/yellow]")
+            continue
+        try:
+            data = load_fight_data(client, rep, fight, actor)
+        except (WCLError, AuthError) as exc:
+            err_console.print(f"[red]Fight {fight.id}: {exc}[/red]")
+            continue
+        metrics = compute_general(data)
+        print_general(console, fight, metrics, data.ability_names)
 
     if debug and client.last_rate_limit:
         rl = client.last_rate_limit
