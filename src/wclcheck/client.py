@@ -41,6 +41,12 @@ class WCLClient:
         )
         self.requests_made = 0
         self.last_rate_limit: dict[str, Any] | None = None
+        # Reports, die trotz Cache neu gezogen werden (`--no-cache` für den Live-Log);
+        # Vergleichslogs bleiben gecacht.
+        self.no_cache_codes: set[str] = set()
+
+    def _max_age(self, code: str, default: float | None) -> float | None:
+        return 0.0 if code in self.no_cache_codes else default
 
     # ------------------------------------------------------------------ Transport
 
@@ -94,7 +100,7 @@ class WCLClient:
             queries.REPORT,
             {"code": code},
             key_parts=(code, "report"),
-            max_age=FIGHTS_MAX_AGE_S,
+            max_age=self._max_age(code, FIGHTS_MAX_AGE_S),
         )
         raw = (data.get("reportData") or {}).get("report")
         if not raw:
@@ -103,7 +109,10 @@ class WCLClient:
 
     def abilities(self, code: str) -> list[Ability]:
         data = self.cached_graphql(
-            queries.REPORT_ABILITIES, {"code": code}, key_parts=(code, "abilities")
+            queries.REPORT_ABILITIES,
+            {"code": code},
+            key_parts=(code, "abilities"),
+            max_age=self._max_age(code, None),
         )
         raw = data["reportData"]["report"]["masterData"]["abilities"] or []
         return [Ability.model_validate(a) for a in raw]
@@ -146,7 +155,7 @@ class WCLClient:
             variables["hostilityType"] = hostility_type
 
         key = DiskCache.key(code, fight.id, "events", variables, DiskCache.key(queries.EVENTS))
-        hit = self.cache.get(key, max_age=self._fight_max_age(fight))
+        hit = self.cache.get(key, max_age=self._max_age(code, self._fight_max_age(fight)))
         if hit is not None:
             return hit
 
@@ -201,7 +210,7 @@ class WCLClient:
             queries.TABLE,
             variables,
             key_parts=(code, fight.id, "table", variables),
-            max_age=self._fight_max_age(fight),
+            max_age=self._max_age(code, self._fight_max_age(fight)),
         )
         table = data["reportData"]["report"]["table"]
         # WCL liefert {"data": {...}}; wir geben das Innere zurück.
@@ -244,6 +253,6 @@ class WCLClient:
             queries.REPORT_RANKINGS,
             {"code": code, "fightIDs": [fight.id], "playerMetric": "dps"},
             key_parts=(code, fight.id, "report_rankings"),
-            max_age=self._fight_max_age(fight),
+            max_age=self._max_age(code, self._fight_max_age(fight)),
         )
         return data["reportData"]["report"]["rankings"] or {}

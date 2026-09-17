@@ -131,6 +131,16 @@ def test_report_is_cached_for_60s(client: WCLClient, api: FakeAPI):
     assert api.graphql_calls == 1
 
 
+def test_no_cache_codes_refetch_only_that_report(client: WCLClient, api: FakeAPI):
+    client.report("qCZ2bPkFVzgc46Lp")
+    client.no_cache_codes.add("qCZ2bPkFVzgc46Lp")
+    client.report("qCZ2bPkFVzgc46Lp")
+    assert api.graphql_calls == 2
+    client.no_cache_codes.clear()
+    client.report("qCZ2bPkFVzgc46Lp")
+    assert api.graphql_calls == 2  # frisch geschriebener Cache-Eintrag wird wieder genutzt
+
+
 def test_token_is_cached_on_disk(settings: Settings, cache: DiskCache, api: FakeAPI):
     http = httpx.Client(transport=httpx.MockTransport(api.handler))
     TokenProvider(settings.client_id, settings.client_secret, cache.root, http).token()

@@ -170,8 +170,10 @@ def main(
     fight_ids = parse_fight_list(fights) or ([url_fight] if url_fight else None)
     player_name = player or settings.player
 
-    cache = DiskCache(enabled=not no_cache)
+    cache = DiskCache()
     client = WCLClient(settings, cache)
+    if no_cache:
+        client.no_cache_codes.add(code)  # nur der analysierte Report wird neu gezogen
     try:
         rep = client.report(code)
     except (WCLError, AuthError) as exc:
